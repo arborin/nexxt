@@ -30,6 +30,9 @@ class Nexxt():
         # RUN SET BROWSER METHOD
         self.set_browser()
 
+    def __del__(self):
+        self.browser.close()
+
     
     def set_browser(self):
         options = Options()
@@ -41,38 +44,102 @@ class Nexxt():
     def get_article_list(self):
         # OPEN URL
         self.browser.get(self.url)
-        self.browser.implicitly_wait(3)
+        # self.browser.implicitly_wait(5)
+        sleep(5)
 
         # CLICK Search 
         self.browser.find_element(By.XPATH, "//button[@value='Suchen']").click()
         
-        # FIND ALL ARTICLES
-        all_articles = self.browser.find_elements(By.CLASS_NAME, "card-title")
+        # FIND LAST PAGE
+        page_count = self.browser.find_elements(By.CLASS_NAME, "pagination-item")[-2].text
         
-        print()
-        for article in all_articles:
-            print('-----------------------------------------------------')
-            link = article.find_element(By.TAG_NAME, 'a')
-            print(link.get_attribute('href'))
-            # self.browser.execute_script("window.open('https://google.com')")
+        # COLLECT ALL LINKS IN LIST
+        article_links = [] 
 
-            # article.click()
-
-            # self.browser.back()
-
+        for i in range(3):
+            sleep(2)
+            # FIND ALL ARTICLES ON PAGE
+            all_articles = self.browser.find_elements(By.CLASS_NAME, "card-title")
             
+            for article in all_articles:
+                link = article.find_element(By.TAG_NAME, 'a')
+                article_links.append(link.get_attribute('href'))
+            
+            next_btn = self.browser.find_elements(By.CLASS_NAME, "pagination-item")[-1]
+
+            # GO TO NEXT PAGE
+            if next_btn:
+                next_btn.click()
+        
+        for link in article_links:
+            print(link)
+        
+        print("----------------------------------------")
+        print(f"Link Count: {len(article_links)}")
+        print("----------------------------------------")
 
 
-    def parse_data(self, page_html):
-        pass
-        # soup = BeautifulSoup(response, 'lxml')
-        print(page_html)
+    def parse_data(self, link):
+        
+        link = "https://www.nexxt-change.org/DE/Verkaufsangebot/Detailseite/detailseite_jsp.html?cms_adId=179101"
+
+        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
+        response = requests.get(link, headers=headers).content
+        
+        soup = BeautifulSoup(response, 'lxml')
+        
+        content_div = soup.find('div', {'class': 'inserat-details'})
+
+        # TITLE
+        title = content_div.find('h1').text
+        print(f"\nTitle:\n---------------\n  {title}")
+        
+        # DESCRIPTION
+        description = content_div.find_all('p')[1].text
+        print(f"\nDescription:\n---------------\n  {description}")
+
+        details = content_div.find("dl", {'class':'lined'})
+
+        dds = details.find_all('dd')
+        
+        # LOCATION
+        location = dds[0].text.strip()
+
+        # INDUSTRY
+        industry = dds[1].text.strip()
+
+        # NUMBER OF EMPLOYEE
+        number_of_employee = dds[2].text.strip()
+
+        # LAST ANNUAL REVANUE
+        last_annual_revanue = dds[3].text.strip()
+
+        # ASKING PRICE
+        asking_price = dds[4].text.strip()
+
+        print("----------------------------------------------------")
+        print(f"{location}\n{industry}\n{number_of_employee}\n{last_annual_revanue}\n{asking_price}")
+        print("----------------------------------------------------")
+        # ADD DATE
+
+        # BOX NUMBER
+
+        # ADD TYPE
+
+        # PARTNER CONTRACT
+
+        # CONTRACT PERSON
+
+
+
+
 
 if __name__ == '__main__':
 
     url = "https://www.nexxt-change.org/DE/Verkaufsangebot/inhalt.html"
-    driver_path = r"C:\Users\admin\Desktop\chromedriver.exe"
+    driver_path = "chromedriver.exe"
 
     scrap = Nexxt(url, driver_path)
-    scrap.get_article_list()
+    # scrap.get_article_list()
+    scrap.parse_data('111')
 
