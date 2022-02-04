@@ -2,6 +2,7 @@
 
 import requests
 import mysql.connector
+import re
 from datetime import datetime
 from time import sleep
 from bs4 import BeautifulSoup
@@ -37,20 +38,27 @@ class DataStore():
                 )
         self.db_cursor = self.db_connect.cursor()
 
+    
+    def check_url_in_db(self, url):
+        sql = "SELECT COUNT(id) FROM nexxt_data_tbl WHERE url=%s"
+        vals = (url,)
+        self.db_cursor.execute(sql, vals)
 
-    def insert(self, table, data):
-        cols = list(data.keys())
+        result = self.db_cursor.fetchall()
         
+        return result[0][0]
+
+
+
+    def insert_data(self, data):
+        cols = list(data.keys()) 
         vals = [data[i] for i in cols]
 
         cols = ','.join(cols)
-        # vals = '"{0}"'.format('", "'.join(vals))
-      
-        sql = f"INSERT INTO {table} ({cols}) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+       
+        sql = f"INSERT INTO nexxt_data_tbl ({cols}) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
         # print(sql)
-    
         self.db_cursor.execute(sql, vals)
-
         self.db_connect.commit()
 
 
@@ -76,7 +84,9 @@ class Nexxt():
         self.browser = webdriver.Chrome(service=self.driver_path, options=options)
 
 
-    def get_article_list(self):
+    def get_article_list(self, date=''):
+
+        date = datetime.strptime(date, '%d.%m.%Y')
         # OPEN URL
         self.browser.get(self.url)
         # self.browser.implicitly_wait(5)
@@ -89,17 +99,36 @@ class Nexxt():
         page_count = self.browser.find_elements(By.CLASS_NAME, "pagination-item")[-2].text
         
         # COLLECT ALL LINKS IN LIST
-        article_links = [] 
+        article_links = []
+
+        # BRAKE PAGING IF DATA IS PASSED AND IT IS LESS THEN ARTICLE DATE
+        brake_paging = False
 
         for i in range(10):
-            sleep(2)
-            # FIND ALL ARTICLES ON PAGE
-            all_articles = self.browser.find_elements(By.CLASS_NAME, "card-title")
             
-            for article in all_articles:
+            # FIND ALL ARTICLES ON PAGE
+            
+            cards = self.browser.find_elements(By.CLASS_NAME, "card")
+            
+            for card in cards:
+                article_date = card.find_element(By.CLASS_NAME, 'date').text
+                # CONVERT TO DATETIME OBJECT
+                article_date = datetime.strptime(article_date, '%d.%m.%Y')
+                
+                if date != '' and article_date < date:
+                    brake_paging = True
+                    break  # BREAK ARTICLE LISTING
+
+                article = card.find_element(By.CLASS_NAME, "card-title")
                 link = article.find_element(By.TAG_NAME, 'a')
                 article_links.append(link.get_attribute('href'))
+
             
+            # BREAK PAGING LOOP
+            if brake_paging:
+                break
+            
+            sleep(2)
             next_btn = self.browser.find_elements(By.CLASS_NAME, "pagination-item")[-1]
 
             # GO TO NEXT PAGE
@@ -174,15 +203,14 @@ class Nexxt():
         # -------------------------------------
         contact_p = sidebar_div.find_all('p')
 
+        # print(contact_p)
+
         # PARTNER CONTRACT
-        partner_contact = contact_p[0].text.strip()
-        partner_contact_link = contact_p[1].text.strip()
-
-        page_data['partner_contact'] = '';
-
-        for cl in partner_contact_link:
-            page_data['partner_contact'] += cl.strip()
+        partner_contact_1 = re.sub(' +', ' ', contact_p[0].text.strip())
+        partner_contact_2 = re.sub(' +', ' ', contact_p[1].text.strip())
+        page_data['partner_contact'] = partner_contact_1 + " " + partner_contact_2
         
+        # print(page_data['partner_contact'])
 
         # CONTRACT PERSON
         page_data['contact_person'] = contact_p[-1].text.strip()
@@ -195,29 +223,7 @@ class Nexxt():
 
         return page_data
         
-        
-
     
-    def save_in_db(self, page_data):
-        pass
-        # DATA STRUCTURE
-        # page_data['title'] = 
-        # page_data['description'] = 
-        # page_data['location'] = 
-        # page_data['industry'] = 
-        # page_data['number_of_employee'] = 
-        # page_data['last_annual_revenue'] = 
-        # page_data['asking_price'] = 
-        # page_data['ad_date'] = 
-        # page_data['box_number'] = 
-        # page_data['ad_type'] = 
-        # page_data['partner_contact'] = 
-        # page_data['contact_person'] = 
-        # page_data['url'] = 
-        # page_data['source'] = 
-
-
-
 
 
 if __name__ == '__main__':
@@ -233,14 +239,21 @@ if __name__ == '__main__':
     scrap = Nexxt(url, driver_path)
     
     # GET ALL LINKS FROM PAGE
-    article_links = scrap.get_article_list()
+    # SAT date 
+
+    article_links = scrap.get_article_list('02.02.2022')
     
     # GET PAGE DATA FOR EACH PAGE
     for link in article_links:
-        print(link)
-        page_data = scrap.parse_data(link)
-        sleep(1)
+        check_link = db.check_url_in_db(link)
 
-        db.insert('nexxt_data_tbl', page_data)
+        # IF LINK IS NOT IN DB
+        if check_link == 0:
+            page_data = scrap.parse_data(link)
+            sleep(1)
+
+            db.insert_data(page_data)
+        else:
+            print("LINK IS ALREADY IN DATABASE")
     
 
