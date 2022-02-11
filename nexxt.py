@@ -85,7 +85,9 @@ class Nexxt():
 
 
     def get_article_list(self, date=''):
-
+        
+        if date == '':
+            date = '01.01.1900'
         date = datetime.strptime(date, '%d.%m.%Y')
         # OPEN URL
         self.browser.get(self.url)
@@ -96,7 +98,8 @@ class Nexxt():
         self.browser.find_element(By.XPATH, "//button[@value='Suchen']").click()
         
         # FIND LAST PAGE
-        page_count = self.browser.find_elements(By.CLASS_NAME, "pagination-item")[-2].text
+        last_page = int(self.browser.find_elements(By.CLASS_NAME, "pagination-item")[-2].text)
+        print(last_page)
         
         # COLLECT ALL LINKS IN LIST
         article_links = []
@@ -104,7 +107,7 @@ class Nexxt():
         # BRAKE PAGING IF DATA IS PASSED AND IT IS LESS THEN ARTICLE DATE
         brake_paging = False
 
-        for i in range(10):
+        for i in range(last_page):
             
             # FIND ALL ARTICLES ON PAGE
             
@@ -121,7 +124,23 @@ class Nexxt():
 
                 article = card.find_element(By.CLASS_NAME, "card-title")
                 link = article.find_element(By.TAG_NAME, 'a')
-                article_links.append(link.get_attribute('href'))
+                link = link.get_attribute('href')
+                # article_links.append(link.get_attribute('href'))
+
+               
+                check_link = db.check_url_in_db(link)
+
+                # IF LINK IS NOT IN DB
+                if check_link == 0:
+                    page_data = scrap.parse_data(link)
+                    sleep(2)
+
+                    db.insert_data(page_data)
+                else:
+                    print("LINK IS ALREADY IN DATABASE")
+
+
+
 
             
             # BREAK PAGING LOOP
@@ -241,19 +260,20 @@ if __name__ == '__main__':
     # GET ALL LINKS FROM PAGE
     # SAT date 
 
-    article_links = scrap.get_article_list('02.02.2022')
+    # article_links = scrap.get_article_list('02.02.2022')
+    article_links = scrap.get_article_list()
     
     # GET PAGE DATA FOR EACH PAGE
-    for link in article_links:
-        check_link = db.check_url_in_db(link)
+    # for link in article_links:
+    #     check_link = db.check_url_in_db(link)
 
-        # IF LINK IS NOT IN DB
-        if check_link == 0:
-            page_data = scrap.parse_data(link)
-            sleep(1)
+    #     # IF LINK IS NOT IN DB
+    #     if check_link == 0:
+    #         page_data = scrap.parse_data(link)
+    #         sleep(2)
 
-            db.insert_data(page_data)
-        else:
-            print("LINK IS ALREADY IN DATABASE")
+    #         db.insert_data(page_data)
+    #     else:
+    #         print("LINK IS ALREADY IN DATABASE")
     
 
